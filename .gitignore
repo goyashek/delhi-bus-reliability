@@ -1,0 +1,28 @@
+# Secrets and local settings
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Local data and generated artifacts
+data/
+artifacts/
+models/
+mlruns/
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+
+# Keep project notes local; README files remain trackable
+*.md
+!README.md
+!**/README.md
