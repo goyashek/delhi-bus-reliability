@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.acoc47862.delhi-bus-r2-backup</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>/Users/abhigoyal/Library/Application Support/delhi-bus-reliability/backup_r2.zsh</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>DELHI_BUS_BACKUP_HOME</key>
+    <string>/Users/abhigoyal/Library/Application Support/delhi-bus-reliability</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>21600</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>/tmp/delhi-bus-r2-backup.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/delhi-bus-r2-backup.err.log</string>
+</dict>
+</plist>

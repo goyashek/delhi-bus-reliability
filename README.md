@@ -25,6 +25,23 @@ The collector writes one append-only CSV per UTC day under `data/raw/vehicle_pos
 
 Download the official static GTFS ZIP from the [Delhi Open Transit Data page](https://otd.delhi.gov.in/data/static/) and extract it under `data/external/gtfs_static/`.
 
+## Cloud collection
+
+The Cloudflare Worker under `cloudflare/` saves one raw protobuf snapshot per minute to a private R2 bucket. From that directory:
+
+```bash
+# Enable R2 under Storage & databases in the Cloudflare dashboard first.
+npx wrangler@latest login
+npx wrangler@latest r2 bucket create delhi-bus-vehicle-positions
+npx wrangler@latest r2 bucket lifecycle add delhi-bus-vehicle-positions delete-after-10-days --expire-days 10 --force
+npx wrangler@latest secret put OTD_API_KEY
+npx wrangler@latest deploy
+```
+
+The 10-day expiry keeps the bucket inside R2's free storage allowance at the current feed size. Copy the bucket to local storage at least once a week before Cloudflare deletes older snapshots.
+
+For automatic local backups, create a read-only R2 API token scoped to `delhi-bus-vehicle-positions`, then add its access key and secret to `.env` using the names in `.env.example`. The included macOS job runs every six hours while the machine is available. Its runtime files live under the user Application Support folder because macOS blocks background jobs from opening scripts inside `Documents`.
+
 ## Data and secrets
 
 API keys belong in `.env` and must never be committed. Raw transit snapshots and generated artifacts also stay out of Git. Scheduled times in `stop_times.txt` are rough estimates, so the project will not treat them as observed arrivals.

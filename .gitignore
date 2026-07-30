@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+.dev.vars
 
 # Python
 .venv/
@@ -21,6 +22,7 @@ mlruns/
 .DS_Store
 .idea/
 .vscode/
+.wrangler/
 
 # Keep project notes local; README files remain trackable
 *.md
