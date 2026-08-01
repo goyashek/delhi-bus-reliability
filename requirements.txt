@@ -1,5 +1,6 @@
 gtfs-realtime-bindings==2.1.0
 ipykernel==6.31.0
 matplotlib==3.10.6
+pyarrow==25.0.0
 python-dotenv==1.2.2
 requests==2.34.2

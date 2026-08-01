@@ -27,9 +27,7 @@ COLUMNS = [
 ]
 
 
-def parse_feed(content, collected_at):
-    feed = gtfs_realtime_pb2.FeedMessage()
-    feed.ParseFromString(content)
+def feed_rows(feed, collected_at):
     rows = []
 
     for entity in feed.entity:
@@ -40,29 +38,35 @@ def parse_feed(content, collected_at):
             {
                 "collection_timestamp": collected_at,
                 "entity_id": entity.id,
-                "vehicle_id": vehicle.vehicle.id,
-                "trip_id": vehicle.trip.trip_id,
-                "route_id": vehicle.trip.route_id,
+                "vehicle_id": vehicle.vehicle.id or None,
+                "trip_id": vehicle.trip.trip_id or None,
+                "route_id": vehicle.trip.route_id or None,
                 "latitude": vehicle.position.latitude,
                 "longitude": vehicle.position.longitude,
-                "speed": vehicle.position.speed if vehicle.position.HasField("speed") else "",
-                "bearing": vehicle.position.bearing if vehicle.position.HasField("bearing") else "",
+                "speed": vehicle.position.speed if vehicle.position.HasField("speed") else None,
+                "bearing": vehicle.position.bearing if vehicle.position.HasField("bearing") else None,
                 "current_stop_sequence": (
                     vehicle.current_stop_sequence
                     if vehicle.HasField("current_stop_sequence")
-                    else ""
+                    else None
                 ),
                 "current_status": (
                     gtfs_realtime_pb2.VehiclePosition.VehicleStopStatus.Name(
                         vehicle.current_status
                     )
                     if vehicle.HasField("current_status")
-                    else ""
+                    else None
                 ),
                 "feed_timestamp": feed.header.timestamp,
             }
         )
     return rows
+
+
+def parse_feed(content, collected_at):
+    feed = gtfs_realtime_pb2.FeedMessage()
+    feed.ParseFromString(content)
+    return feed_rows(feed, collected_at)
 
 
 def fetch_rows():

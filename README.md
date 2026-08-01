@@ -25,6 +25,17 @@ The collector writes one append-only CSV per UTC day under `data/raw/vehicle_pos
 
 Download the official static GTFS ZIP from the [Delhi Open Transit Data page](https://otd.delhi.gov.in/data/static/) and extract it under `data/external/gtfs_static/`.
 
+## Day 3 processing
+
+After the R2 backup has downloaded raw protobuf snapshots, prepare the selected routes:
+
+```bash
+.venv/bin/python prepare_positions.py --self-test
+.venv/bin/python prepare_positions.py
+```
+
+The script reads route IDs from `data/interim/selected_route_schedule.csv`. It writes one UTC partition per day under `data/processed/vehicle_positions/`, with `positions.parquet` for selected observations and `snapshots.parquet` for request and feed metadata. Archived responses are marked `2xx` because the Worker saves only successful, non-empty responses. `data/processed/collection_health.csv` records collection coverage, empty feeds, parse errors, feed lag, and missing intervals.
+
 ## Cloud collection
 
 The Cloudflare Worker under `cloudflare/` saves one raw protobuf snapshot per minute to a private R2 bucket. From that directory:
