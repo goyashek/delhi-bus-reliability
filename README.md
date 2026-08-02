@@ -36,6 +36,17 @@ After the R2 backup has downloaded raw protobuf snapshots, prepare the selected 
 
 The script reads route IDs from `data/interim/selected_route_schedule.csv`. It writes one UTC partition per day under `data/processed/vehicle_positions/`, with `positions.parquet` for selected observations and `snapshots.parquet` for request and feed metadata. Archived responses are marked `2xx` because the Worker saves only successful, non-empty responses. `data/processed/collection_health.csv` records collection coverage, empty feeds, parse errors, feed lag, and missing intervals.
 
+## Day 4 feed audit
+
+Run the quality audit after processing new snapshots:
+
+```bash
+.venv/bin/python audit_feed.py --self-test
+.venv/bin/python audit_feed.py
+```
+
+The audit writes row-level flags to `data/processed/feed_quality_flags.parquet` and route totals to `data/processed/feed_quality.csv`. It keeps every observation. It marks repeated stream timestamps as stale, exact repeated points as duplicates, missing or out-of-range coordinates as invalid, movements over 2 km as large jumps, implied speeds over 120 km/h as implausible, and missing trip IDs separately. Large jumps are review flags because long collection gaps can produce a large but plausible displacement.
+
 ## Cloud collection
 
 The Cloudflare Worker under `cloudflare/` saves one raw protobuf snapshot per minute to a private R2 bucket. From that directory:
