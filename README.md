@@ -56,7 +56,7 @@ Build the static stop geometry and compare it with current GPS tracks:
 .venv/bin/python route_progress.py
 ```
 
-The script writes cumulative stop geometry, nearest-stop assignments, route progress, and a trajectory plot. The old Kaggle fallback passes route-ID matching but fails the spatial check: 97.47% to 100% of selected live observations are more than 1.5 km from their nearest static stop. The downloaded official feed aligns much better: median nearest-stop distances are about 124 m for route `1411`, 148 m for `1788`, 248 m for `1881`, and 125 m for `32`. The selected schedule CSV still needs to be regenerated from the official ZIP before running the default command for Day 6.
+The script writes cumulative stop geometry, nearest-stop assignments, route progress, and a trajectory plot. The old Kaggle fallback passes route-ID matching but fails the spatial check: 97.47% to 100% of selected live observations are more than 1.5 km from their nearest static stop. The active schedule is now generated from the official v28 ZIP, with median nearest-stop distances of about 124 m for route `1411`, 148 m for `1788`, 248 m for `1881`, and 125 m for `32`. The over-1.5 km flags are 2.14%, 0.42%, 14.83%, and 11.11%; the `1881` outliers are concentrated in three vehicles. These flags remain visible for later cleaning, and Day 5 is complete.
 
 ## Cloud collection
 

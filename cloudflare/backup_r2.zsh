@@ -17,10 +17,15 @@ export RCLONE_CONFIG_DELBUS_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY
 destination="$backup_home/data/raw/vehicle_positions_pb"
 mkdir -p "$destination"
 
+# ponytail: append-only object keys, skip existing files; run a full check if corruption is found.
 /opt/homebrew/bin/rclone copy \
   delbus:delhi-bus-vehicle-positions/vehicle_positions \
   "$destination" \
   --fast-list \
-  --immutable
+  --ignore-existing \
+  --transfers 2 \
+  --checkers 4 \
+  --retries 5 \
+  --low-level-retries 10
 
 date -u "+%Y-%m-%dT%H:%M:%SZ" > "$destination/.last_success"
