@@ -23,7 +23,7 @@ Copy your private OTD key into `.env`, then test and run the collector:
 
 The collector writes one append-only CSV per UTC day under `data/raw/vehicle_positions/`. Stop the continuous collector with `Ctrl+C`.
 
-Download the official static GTFS ZIP from the [Delhi Open Transit Data page](https://otd.delhi.gov.in/data/static/) and extract it under `data/external/gtfs_static/`.
+The official static GTFS ZIP is stored under `data/external/delhi_buses_static_gtfs/`. Its `feed_info.txt` identifies Delhi Transport Corporation and Delhi Integrated Multi-Modal Transit System Ltd., version `v28`, with feed dates from 2025-01-01 through 2040-01-01. The accompanying PDFs describe the Delhi Transport Stack registration and download flow. Their summary counts are older than the ZIP, so the actual GTFS files are the source of truth.
 
 ## Day 3 processing
 
@@ -46,6 +46,17 @@ Run the quality audit after processing new snapshots:
 ```
 
 The audit writes row-level flags to `data/processed/feed_quality_flags.parquet` and route totals to `data/processed/feed_quality.csv`. It keeps every observation. It marks repeated stream timestamps as stale, exact repeated points as duplicates, missing or out-of-range coordinates as invalid, movements over 2 km as large jumps, implied speeds over 120 km/h as implausible, and missing trip IDs separately. Large jumps are review flags because long collection gaps can produce a large but plausible displacement.
+
+## Day 5 route progress
+
+Build the static stop geometry and compare it with current GPS tracks:
+
+```bash
+.venv/bin/python route_progress.py --self-test
+.venv/bin/python route_progress.py
+```
+
+The script writes cumulative stop geometry, nearest-stop assignments, route progress, and a trajectory plot. The old Kaggle fallback passes route-ID matching but fails the spatial check: 97.47% to 100% of selected live observations are more than 1.5 km from their nearest static stop. The downloaded official feed aligns much better: median nearest-stop distances are about 124 m for route `1411`, 148 m for `1788`, 248 m for `1881`, and 125 m for `32`. The selected schedule CSV still needs to be regenerated from the official ZIP before running the default command for Day 6.
 
 ## Cloud collection
 
