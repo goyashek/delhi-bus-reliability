@@ -24,7 +24,7 @@ mlruns/
 .vscode/
 .wrangler/
 
-# Keep project notes local; README files remain trackable
+# Keep plans, progress, instructions, and local Markdown config private; publish README files
 *.md
 !README.md
 !**/README.md
