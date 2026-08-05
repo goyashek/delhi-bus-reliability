@@ -16,6 +16,7 @@ EARTH_RADIUS_M = 6_371_008.8
 MAX_JUMP_METERS = 2_000.0
 MAX_IMPLAUSIBLE_SPEED_KMH = 120.0
 MISSING_FIELDS = [
+    "observation_timestamp",
     "entity_id",
     "vehicle_id",
     "trip_id",
@@ -39,6 +40,7 @@ FLAG_COLUMNS = [
 FLAG_SCHEMA = pa.schema(
     [
         ("collection_timestamp", pa.timestamp("us", tz="UTC")),
+        ("observation_timestamp", pa.timestamp("us", tz="UTC")),
         ("entity_id", pa.string()),
         ("vehicle_id", pa.string()),
         ("trip_id", pa.string()),
@@ -87,7 +89,7 @@ def audit_rows(rows):
         key=lambda row: (
             row["route_id"] or "",
             stream_key(row),
-            row["collection_timestamp"],
+            row["observation_timestamp"],
             row["entity_id"] or "",
         ),
     )
@@ -100,7 +102,7 @@ def audit_rows(rows):
         key = (
             current["route_id"],
             stream_key(current),
-            current["collection_timestamp"],
+            current["observation_timestamp"],
             current["latitude"],
             current["longitude"],
             current["trip_id"],
@@ -121,7 +123,7 @@ def audit_rows(rows):
         prior = previous.get((current["route_id"], stream_key(current)))
         if prior is not None:
             interval = (
-                current["collection_timestamp"] - prior["collection_timestamp"]
+                current["observation_timestamp"] - prior["observation_timestamp"]
             ).total_seconds()
             if interval > 0:
                 current["update_interval_seconds"] = interval
@@ -279,6 +281,7 @@ def self_test():
     rows = [
         {
             "collection_timestamp": timestamp,
+            "observation_timestamp": timestamp,
             "entity_id": "entity-1",
             "vehicle_id": "bus-1",
             "trip_id": "trip-1",
@@ -289,6 +292,7 @@ def self_test():
         },
         {
             "collection_timestamp": timestamp.replace(minute=1),
+            "observation_timestamp": timestamp.replace(minute=1),
             "entity_id": "entity-1",
             "vehicle_id": "bus-1",
             "trip_id": "trip-1",
@@ -299,6 +303,7 @@ def self_test():
         },
         {
             "collection_timestamp": timestamp.replace(minute=2),
+            "observation_timestamp": timestamp.replace(minute=2),
             "entity_id": "entity-1",
             "vehicle_id": "bus-1",
             "trip_id": "",
@@ -309,6 +314,7 @@ def self_test():
         },
         {
             "collection_timestamp": timestamp.replace(minute=2),
+            "observation_timestamp": timestamp.replace(minute=2),
             "entity_id": "entity-1",
             "vehicle_id": "bus-1",
             "trip_id": "",

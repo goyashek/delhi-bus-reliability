@@ -19,7 +19,8 @@ PROGRESS_SCHEMA = pa.schema(
         ("nearest_stop_sequence", pa.int32()),
         ("temporal_stop_sequence", pa.int32()),
         ("distance_to_nearest_stop_m", pa.float64()),
-        ("estimated_direction", pa.string()),
+        ("route_variant_label", pa.string()),
+        ("direction_id", pa.string()),
         ("route_progress_fraction", pa.float64()),
         ("route_distance_m", pa.float64()),
         ("is_far_from_route", pa.bool_()),
@@ -34,34 +35,36 @@ def load_geometry(schedule_path):
     with Path(schedule_path).open(newline="", encoding="utf-8") as file:
         for row in csv.DictReader(file):
             route_id = row["route_id"].strip()
-            direction = row["route_long_name"].strip() or route_id
+            route_variant_label = row["route_long_name"].strip() or route_id
+            direction_id = row["direction_id"].strip() or None
             sequence = int(float(row["stop_sequence"]))
             stop = {
                 "route_id": route_id,
-                "estimated_direction": direction,
+                "route_variant_label": route_variant_label,
+                "direction_id": direction_id,
                 "stop_id": row["stop_id"].strip(),
                 "stop_name": row["stop_name"].strip(),
                 "stop_sequence": sequence,
                 "stop_lat": float(row["stop_lat"]),
                 "stop_lon": float(row["stop_lon"]),
             }
-            labels[route_id].add(direction)
-            previous = groups[(route_id, direction)].get(sequence)
+            labels[route_id].add(route_variant_label)
+            previous = groups[(route_id, route_variant_label)].get(sequence)
             if previous is not None and previous["stop_id"] != stop["stop_id"]:
                 raise ValueError(
-                    f"stop sequence {sequence} changes within {route_id} {direction}"
+                    f"stop sequence {sequence} changes within {route_id} {route_variant_label}"
                 )
-            groups[(route_id, direction)][sequence] = stop
+            groups[(route_id, route_variant_label)][sequence] = stop
 
     geometries = {}
     geometry_rows = []
     for route_id in sorted(labels):
         if len(labels[route_id]) != 1:
             raise ValueError(f"{route_id} has multiple direction labels")
-        direction = next(iter(labels[route_id]))
+        route_variant_label = next(iter(labels[route_id]))
         stops = [
-            groups[(route_id, direction)][sequence]
-            for sequence in sorted(groups[(route_id, direction)])
+            groups[(route_id, route_variant_label)][sequence]
+            for sequence in sorted(groups[(route_id, route_variant_label)])
         ]
         if len(stops) < 2:
             raise ValueError(f"{route_id} has fewer than two stops")
@@ -122,9 +125,10 @@ def assign_nearest(rows, geometries):
         current["nearest_stop_sequence"] = stop["stop_sequence"] if stop else None
         current["temporal_stop_sequence"] = None
         current["distance_to_nearest_stop_m"] = distance
-        current["estimated_direction"] = (
-            stop["estimated_direction"] if stop else None
+        current["route_variant_label"] = (
+            stop["route_variant_label"] if stop else None
         )
+        current["direction_id"] = stop["direction_id"] if stop else None
         current["route_progress_fraction"] = None
         current["route_distance_m"] = None
         current["is_far_from_route"] = (
@@ -141,7 +145,7 @@ def apply_temporal_consistency(rows, geometries):
         grouped[(row["route_id"], stream_key(row), row["trip_id"] or "")].append(index)
 
     for indexes in grouped.values():
-        indexes.sort(key=lambda index: rows[index]["collection_timestamp"])
+        indexes.sort(key=lambda index: rows[index]["observation_timestamp"])
         previous_sequence = None
         for index in indexes:
             row = rows[index]
@@ -186,7 +190,8 @@ def route_summary(rows, geometries):
         summaries.append(
             {
                 "route_id": route_id,
-                "estimated_direction": static[0]["estimated_direction"],
+                "route_variant_label": static[0]["route_variant_label"],
+                "direction_id": static[0]["direction_id"],
                 "stop_count": len(static),
                 "route_length_m": static[-1]["route_distance_m"],
                 "observation_count": len(route_rows),
@@ -256,7 +261,7 @@ def plot_trajectories(rows, geometries, path):
                 vehicle_rows[row["vehicle_id"]].append(row)
         selected = sorted(vehicle_rows.items(), key=lambda item: len(item[1]), reverse=True)[:3]
         for vehicle_id, vehicle_points in selected:
-            vehicle_points.sort(key=lambda row: row["collection_timestamp"])
+            vehicle_points.sort(key=lambda row: row["observation_timestamp"])
             axis.plot(
                 [row["longitude"] for row in vehicle_points],
                 [row["latitude"] for row in vehicle_points],
@@ -264,7 +269,7 @@ def plot_trajectories(rows, geometries, path):
                 alpha=0.7,
                 label=vehicle_id,
             )
-        axis.set_title(f"{route_id} {static[0]['estimated_direction']}")
+        axis.set_title(f"{route_id} {static[0]['route_variant_label']}")
         axis.set_xlabel("longitude")
         axis.set_ylabel("latitude")
         axis.legend(fontsize=7)
@@ -303,7 +308,8 @@ def self_test():
         "route-1": [
             {
                 "route_id": "route-1",
-                "estimated_direction": "test",
+                "route_variant_label": "test",
+                "direction_id": None,
                 "stop_id": "a",
                 "stop_sequence": 0,
                 "stop_lat": 28.6,
@@ -313,7 +319,8 @@ def self_test():
             },
             {
                 "route_id": "route-1",
-                "estimated_direction": "test",
+                "route_variant_label": "test",
+                "direction_id": None,
                 "stop_id": "b",
                 "stop_sequence": 1,
                 "stop_lat": 28.6,
@@ -326,6 +333,7 @@ def self_test():
     rows = [
         {
             "collection_timestamp": timestamp,
+            "observation_timestamp": timestamp,
             "entity_id": "entity-1",
             "vehicle_id": "bus-1",
             "trip_id": "trip-1",
@@ -335,6 +343,7 @@ def self_test():
         },
         {
             "collection_timestamp": timestamp.replace(minute=1),
+            "observation_timestamp": timestamp.replace(minute=1),
             "entity_id": "entity-1",
             "vehicle_id": "bus-1",
             "trip_id": "trip-1",

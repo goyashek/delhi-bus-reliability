@@ -19,6 +19,7 @@ ARRIVAL_SCHEMA = pa.schema(
     [
         ("vehicle_id", pa.string()),
         ("route_id", pa.string()),
+        ("route_variant_label", pa.string()),
         ("direction_id", pa.string()),
         ("trip_id", pa.string()),
         ("stop_id", pa.string()),
@@ -39,14 +40,16 @@ def load_progress(path):
     table = pq.read_table(path)
     required = {
         "collection_timestamp",
+        "observation_timestamp",
         "entity_id",
         "vehicle_id",
         "trip_id",
         "route_id",
+        "route_variant_label",
+        "direction_id",
         "nearest_stop_id",
         "nearest_stop_sequence",
         "distance_to_nearest_stop_m",
-        "estimated_direction",
         "is_far_from_route",
         "is_sequence_backstep",
     }
@@ -61,7 +64,7 @@ def grouped_streams(rows):
     for row in rows:
         groups[(row["route_id"], stream_key(row), row["trip_id"] or "")].append(row)
     for stream in groups.values():
-        yield sorted(stream, key=lambda row: row["collection_timestamp"])
+        yield sorted(stream, key=lambda row: row["observation_timestamp"])
 
 
 def confidence(distance_m, radius_m, sampling_gap_s, before, after, sequence_consistent):
@@ -155,8 +158,8 @@ def infer_stream(stream, radius_m):
         sampling_gap_s = None
         if before and after:
             sampling_gap_s = (
-                after_row["collection_timestamp"]
-                - before_row["collection_timestamp"]
+                after_row["observation_timestamp"]
+                - before_row["observation_timestamp"]
             ).total_seconds()
         sequence_consistent = (
             not row["is_sequence_backstep"]
@@ -175,11 +178,12 @@ def infer_stream(stream, radius_m):
             {
                 "vehicle_id": row["vehicle_id"],
                 "route_id": row["route_id"],
-                "direction_id": row["estimated_direction"],
+                "route_variant_label": row["route_variant_label"],
+                "direction_id": row["direction_id"],
                 "trip_id": row["trip_id"],
                 "stop_id": row["nearest_stop_id"],
                 "stop_sequence": sequence,
-                "inferred_arrival_time": row["collection_timestamp"],
+                "inferred_arrival_time": row["observation_timestamp"],
                 "minimum_distance_m": round(
                     row["distance_to_nearest_stop_m"], 3
                 ),
@@ -247,10 +251,14 @@ def sensitivity_rows(rows, radii):
             arrivals_by_route[arrival["route_id"]].append(arrival)
         for route_id, route_rows in sorted(routes.items()):
             route_arrivals = arrivals_by_route[route_id]
-            direction = next(
-                row["estimated_direction"]
+            route_variant_label = next(
+                row["route_variant_label"]
                 for row in route_rows
-                if row["estimated_direction"]
+                if row["route_variant_label"]
+            )
+            direction_id = next(
+                (row["direction_id"] for row in route_rows if row["direction_id"]),
+                None,
             )
             route_eligible_count = sum(
                 not row["is_far_from_route"] for row in route_rows
@@ -260,7 +268,8 @@ def sensitivity_rows(rows, radii):
                 {
                     "radius_m": radius_m,
                     "route_id": route_id,
-                    "direction_id": direction,
+                    "route_variant_label": route_variant_label,
+                    "direction_id": direction_id,
                     "eligible_observation_count": route_eligible_count,
                     "far_route_excluded_count": route_far_count,
                     "arrival_count": len(route_arrivals),
@@ -286,6 +295,7 @@ def self_test():
     rows = [
         {
             "collection_timestamp": timestamp,
+            "observation_timestamp": timestamp,
             "entity_id": "entity-1",
             "vehicle_id": "bus-1",
             "trip_id": "trip-1",
@@ -293,12 +303,14 @@ def self_test():
             "nearest_stop_id": "a",
             "nearest_stop_sequence": 0,
             "distance_to_nearest_stop_m": 20.0,
-            "estimated_direction": "UP",
+            "route_variant_label": "UP",
+            "direction_id": None,
             "is_far_from_route": False,
             "is_sequence_backstep": False,
         },
         {
             "collection_timestamp": timestamp.replace(minute=1),
+            "observation_timestamp": timestamp.replace(minute=1),
             "entity_id": "entity-1",
             "vehicle_id": "bus-1",
             "trip_id": "trip-1",
@@ -306,12 +318,14 @@ def self_test():
             "nearest_stop_id": "b",
             "nearest_stop_sequence": 1,
             "distance_to_nearest_stop_m": 10.0,
-            "estimated_direction": "UP",
+            "route_variant_label": "UP",
+            "direction_id": None,
             "is_far_from_route": False,
             "is_sequence_backstep": False,
         },
         {
             "collection_timestamp": timestamp.replace(minute=2),
+            "observation_timestamp": timestamp.replace(minute=2),
             "entity_id": "entity-1",
             "vehicle_id": "bus-1",
             "trip_id": "trip-1",
@@ -319,12 +333,14 @@ def self_test():
             "nearest_stop_id": "c",
             "nearest_stop_sequence": 2,
             "distance_to_nearest_stop_m": 100.0,
-            "estimated_direction": "UP",
+            "route_variant_label": "UP",
+            "direction_id": None,
             "is_far_from_route": False,
             "is_sequence_backstep": False,
         },
         {
             "collection_timestamp": timestamp.replace(minute=3),
+            "observation_timestamp": timestamp.replace(minute=3),
             "entity_id": "entity-1",
             "vehicle_id": "bus-1",
             "trip_id": "trip-1",
@@ -332,7 +348,8 @@ def self_test():
             "nearest_stop_id": "c",
             "nearest_stop_sequence": 3,
             "distance_to_nearest_stop_m": 10.0,
-            "estimated_direction": "UP",
+            "route_variant_label": "UP",
+            "direction_id": None,
             "is_far_from_route": True,
             "is_sequence_backstep": False,
         },

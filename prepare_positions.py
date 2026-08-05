@@ -19,6 +19,7 @@ SNAPSHOT_TIME_FORMAT = "%Y-%m-%dT%H-%M-%S.%fZ"
 POSITIONS_SCHEMA = pa.schema(
     [
         ("collection_timestamp", pa.timestamp("us", tz="UTC")),
+        ("observation_timestamp", pa.timestamp("us", tz="UTC")),
         ("entity_id", pa.string()),
         ("vehicle_id", pa.string()),
         ("trip_id", pa.string()),
@@ -112,6 +113,7 @@ def process_day(day, paths, route_ids, input_dir, output_dir):
             selected_rows = [row for row in rows if row["route_id"] in route_ids]
             for row in selected_rows:
                 row["feed_timestamp"] = timestamp
+                row["observation_timestamp"] = timestamp or requested_at
             positions.extend(selected_rows)
             snapshot["entity_count"] = len(feed.entity)
             snapshot["selected_route_vehicle_count"] = sum(
@@ -217,14 +219,27 @@ def self_test():
         feed.header.timestamp = 1785542570
         (raw / "2026-08-01T00-02-50.000Z.pb").write_bytes(feed.SerializeToString())
 
+        feed.Clear()
+        feed.header.gtfs_realtime_version = "2.0"
+        entity = feed.entity.add()
+        entity.id = "entity-2"
+        entity.vehicle.vehicle.id = "bus-2"
+        entity.vehicle.trip.route_id = "selected"
+        entity.vehicle.position.latitude = 28.62
+        entity.vehicle.position.longitude = 77.22
+        (raw / "2026-08-01T00-03-50.000Z.pb").write_bytes(feed.SerializeToString())
+
         output = root / "processed"
         health_path = output / "collection_health.csv"
         health = process_archive(raw.parent, schedule, output / "positions", health_path)
         day = output / "positions/date=2026-08-01"
-        assert pq.read_metadata(day / "positions.parquet").num_rows == 1
-        assert pq.read_metadata(day / "snapshots.parquet").num_rows == 2
+        positions = pq.read_table(day / "positions.parquet").to_pylist()
+        assert len(positions) == 2
+        assert positions[1]["feed_timestamp"] is None
+        assert positions[1]["observation_timestamp"] == positions[1]["collection_timestamp"]
+        assert pq.read_metadata(day / "snapshots.parquet").num_rows == 3
         assert pq.read_schema(day / "positions.parquet") == POSITIONS_SCHEMA
-        assert health[0]["expected_snapshot_count"] == 3
+        assert health[0]["expected_snapshot_count"] == 4
         assert health[0]["empty_feed_count"] == 1
         assert health[0]["maximum_gap_seconds"] == 120
     print("self-test passed")
