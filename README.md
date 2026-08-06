@@ -6,7 +6,7 @@ The student version will reconstruct journeys and stop arrivals, measure headway
 
 ## Current state
 
-The current pipeline has 7,768 raw protobuf snapshots from July 30 through August 5, 84,130 selected observations, feed-quality flags, official route geometry, and 9,930 inferred stop passages. Trip reconstruction, reliability analysis, modelling, and the dashboard are the remaining project stages.
+The current pipeline has 7,768 raw protobuf snapshots from July 30 through August 5, 84,130 selected observations, feed-quality flags, official route geometry, and 9,930 inferred stop passages. The arrival-coverage check found usable passages at 191 of 193 static stops. Trip reconstruction, reliability analysis, modelling, and the dashboard are the remaining project stages.
 
 ## Setup and local collection
 
@@ -74,6 +74,8 @@ Infer arrivals from the official route-progress file:
 The script excludes observations flagged as more than 1.5 km from their reference stops, keeps chronological stop movement within each vehicle and trip stream, and chooses the closest observation for each stop passage. It writes `data/processed/stop_arrivals.parquet` at a 50 m radius and compares 25 m, 40 m, 50 m, and 75 m in `data/processed/stop_arrival_sensitivity.csv`. `route_variant_label` comes from the official static schedule, while `direction_id` stays nullable because the live feed has no direction field and the selected trips do not provide one. Arrival confidence uses distance, the time gap around the selected observation, and the availability of observations before and after it.
 
 The 50 m run produced 9,930 passages: 1,392 high confidence, 7,474 medium confidence, and 1,064 low confidence. The radius sensitivity produced 5,310 passages at 25 m, 8,229 at 40 m, and 13,534 at 75 m. The 50 m setting keeps the wider 75 m geofence from adding too many weak matches while retaining more passages than 25 m or 40 m. The run excluded 7,462 far-route observations.
+
+Check coverage and sampling limits in `notebooks/02_arrival_coverage.ipynb`. The 50 m table spans all seven collection dates and 216 vehicles. The largest vehicle share is 2.33% overall, although route `1881` has only 14 contributing vehicles and should be treated as a narrower sample. Widening to 75 m adds 3,604 passages, 90.9% of them medium confidence and 9.1% low confidence, so I kept 50 m and did not add crossing-time interpolation. The inferred time is still the timestamp of a sampled GPS observation, not the exact stop-crossing time, and the two stops with no passages remain visible in the coverage table.
 
 ## Cloud collection
 
