@@ -6,7 +6,9 @@ The student version will reconstruct journeys and stop arrivals, measure headway
 
 ## Current state
 
-The current pipeline has 7,768 raw protobuf snapshots from July 30 through August 5, 84,130 selected observations, feed-quality flags, official route geometry, and 9,930 inferred stop passages. The arrival-coverage check found usable passages at 191 of 193 static stops. Trip reconstruction, reliability analysis, modelling, and the dashboard are the remaining project stages.
+The pipeline covers 9,444 raw protobuf snapshots from July 30 through August 7, which is 98.1% of the expected one-minute slots across nine collection dates. Those snapshots produce 102,016 selected observations, feed-quality flags, official route geometry, 11,409 inferred stop passages, and 1,763 reconstructed trips. The arrival-coverage check found usable passages at 192 of the 193 static stops on the selected routes. Reliability analysis, travel-time modelling, and the dashboard are the remaining project stages.
+
+Collection is still running, so the date count grows. The chronological modelling split needs at least ten usable dates, and two of the nine current dates are short partial days, so the final metrics stay provisional until more full days are collected.
 
 ## Setup and local collection
 
@@ -60,7 +62,7 @@ Build the static stop geometry and compare it with current GPS tracks:
 .venv/bin/python route_progress.py
 ```
 
-The script writes cumulative stop geometry, nearest-stop assignments, route progress, and a trajectory plot. It labels each stream with the official `route_variant_label` from the static schedule. `direction_id` remains nullable because the selected official trips do not provide it. Across the current archive, median nearest-stop distances are about 143 m for route `1411`, 151 m for `1788`, 261 m for `1881`, and 124 m for `32`. The over-1.5 km flags are 3.64%, 0.47%, 16.74%, and 14.17%; the flags remain visible for later cleaning.
+The script writes cumulative stop geometry, nearest-stop assignments, route progress, and a trajectory plot. It labels each stream with the official `route_variant_label` from the static schedule. `direction_id` remains nullable because the selected official trips do not provide it. Across the current archive, median nearest-stop distances are about 160 m for route `1411`, 149 m for `1788`, 261 m for `1881`, and 125 m for `32`. The over-1.5 km flags are 4.68%, 0.48%, 17.11%, and 13.91%; the flags remain visible for later cleaning.
 
 ## Infer stop passages
 
@@ -73,9 +75,26 @@ Infer arrivals from the official route-progress file:
 
 The script excludes observations flagged as more than 1.5 km from their reference stops, keeps chronological stop movement within each vehicle and trip stream, and chooses the closest observation for each stop passage. It writes `data/processed/stop_arrivals.parquet` at a 50 m radius and compares 25 m, 40 m, 50 m, and 75 m in `data/processed/stop_arrival_sensitivity.csv`. `route_variant_label` comes from the official static schedule, while `direction_id` stays nullable because the live feed has no direction field and the selected trips do not provide one. Arrival confidence uses distance, the time gap around the selected observation, and the availability of observations before and after it.
 
-The 50 m run produced 9,930 passages: 1,392 high confidence, 7,474 medium confidence, and 1,064 low confidence. The radius sensitivity produced 5,310 passages at 25 m, 8,229 at 40 m, and 13,534 at 75 m. The 50 m setting keeps the wider 75 m geofence from adding too many weak matches while retaining more passages than 25 m or 40 m. The run excluded 7,462 far-route observations.
+The 50 m run produced 11,409 passages: 1,608 high confidence, 8,562 medium confidence, and 1,239 low confidence. The radius sensitivity produced 6,071 passages at 25 m, 9,440 at 40 m, and 15,556 at 75 m. The 50 m setting keeps the wider 75 m geofence from adding too many weak matches while retaining more passages than 25 m or 40 m. The run excluded 9,492 far-route observations.
 
-Check coverage and sampling limits in `notebooks/02_arrival_coverage.ipynb`. The 50 m table spans all seven collection dates and 216 vehicles. The largest vehicle share is 2.33% overall, although route `1881` has only 14 contributing vehicles and should be treated as a narrower sample. Widening to 75 m adds 3,604 passages, 90.9% of them medium confidence and 9.1% low confidence, so I kept 50 m and did not add crossing-time interpolation. The inferred time is still the timestamp of a sampled GPS observation, not the exact stop-crossing time, and the two stops with no passages remain visible in the coverage table.
+Check coverage and sampling limits in `notebooks/02_arrival_coverage.ipynb`. The 50 m table spans all nine collection dates and 241 vehicles. The largest vehicle share is 2.32% overall, although route `1881` has only 17 contributing vehicles and should be treated as a narrower sample. Widening to 75 m adds 4,147 passages, 90.4% of them medium confidence and 9.6% low confidence, so I kept 50 m and did not add crossing-time interpolation. The inferred time is still the timestamp of a sampled GPS observation, not the exact stop-crossing time, and the one stop with no passages remains visible in the coverage table.
+
+## Reconstruct trips
+
+Group the inferred passages into journeys:
+
+```bash
+.venv/bin/python reconstruct_trips.py --self-test
+.venv/bin/python reconstruct_trips.py
+```
+
+The script sorts each vehicle's observations by `observation_timestamp` and cuts the stream into trip segments on four signals: a change in the live `trip_id`, a change of route variant, a sampling gap over 30 minutes, and a stop-sequence reset from the end of the route back to the start. The live `trip_id` is used only as a segmentation hint, not as a join key into the static schedule, because its values do not match the official trip IDs.
+
+Each segment gets a `reconstructed_trip_id` plus the observation count, distinct stops seen, expected stop count for the route, completion ratio, largest internal sampling gap, and a count of stop-sequence backsteps. A quality label summarises those numbers: `complete` covers at least 70% of the route stops with no backsteps and no internal gap over 10 minutes, `partial` covers at least 40% with at most two backsteps, `fragment` has fewer than three observations, and `low` is everything else. Those cutoffs are judgement calls tuned against the current archive rather than measured constants, so they are named at the top of the script.
+
+The run produced 1,763 trips from 102,016 observations: 288 complete, 519 partial, 780 low, and 176 fragments. The segmentation fired 898 times on a `trip_id` change, 586 times on a terminal reset, and 21 times on a long gap, with 258 segments starting a vehicle's record. Median durations for complete trips are 152 minutes on `107UP` (73 stops), 115 on `392DOWN`, 106 on `274UP`, and 64 on `ML06UP` (26 stops). `data/processed/stop_arrivals_linked.parquet` repeats the arrival table with the owning `reconstructed_trip_id` attached; all 11,409 passages linked.
+
+The large `low` bucket is mostly buses idling at a terminal after finishing a journey, where the feed issues a fresh `trip_id` while the vehicle barely moves. Checking consecutive segments, only 32 of the 898 `trip_id` splits leave under five minutes between one segment ending and the next beginning, so the rule is not breaking many real journeys into pieces. Passages inside complete or partial trips account for 9,595 of 11,409, or 84.1%.
 
 ## Cloud collection
 
